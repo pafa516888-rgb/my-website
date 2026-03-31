@@ -1,0 +1,304 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Search, Upload, User, ShieldAlert, CheckCircle2, AlertCircle, 
+  LogOut, Database, Award, ArrowUpCircle, History, Bell, 
+  FileSpreadsheet, Edit3, FileText, Printer, ShieldCheck, Flag, Info
+} from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
+
+const SUPABASE_URL = 'https://kdhyobmhcsjsyzjayzrt.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkaHlvYm1oY3Nqc3l6amF5enJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5Nzk3OTMsImV4cCI6MjA5MDU1NTc5M30.z5JipT5AFFnUNclfqFAzAh5sjpo-v1N8yTsRxkD4IOk';
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+export default function App() {
+  const [db, setDb] = useState([]);
+  const [user, setUser] = useState(null);
+  const [currentView, setCurrentView] = useState('login'); 
+
+  useEffect(() => {
+    async function fetchDatabase() {
+      const { data, error } = await supabase.from('members').select('*');
+      if (data) setDb(data);
+    }
+    fetchDatabase();
+  }, []);
+
+  const getMaxQueries = (uploads) => 5 + Math.floor(uploads / 5);
+
+  const isValidID = (id) => {
+    if (!/^[A-Z][12]\d{8}$/i.test(id)) return false;
+    const letterMap = { A:10,B:11,C:12,D:13,E:14,F:15,G:16,H:17,I:34,J:18,K:19,L:20,M:21,N:22,O:35,P:23,Q:24,R:25,S:26,T:27,U:28,V:29,W:32,X:30,Y:31,Z:33 };
+    const upperId = id.toUpperCase();
+    const firstChar = letterMap[upperId[0]];
+    let sum = Math.floor(firstChar / 10) + (firstChar % 10) * 9;
+    for (let i = 1; i < 9; i++) sum += parseInt(upperId[i]) * (9 - i);
+    sum += parseInt(upperId[9]);
+    return sum % 10 === 0;
+  };
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    setUser({
+      name: '管理員', role: 'official', uploads: 20, queriesToday: 0,
+      lastQueryDate: new Date().toLocaleDateString(), queryHistory: [],
+      loginLog: { ip: '192.168.1.1', time: new Date().toLocaleString() },
+      notifications: [{ id: 1, text: '系統已連線至 Supabase 資料庫。', date: new Date().toLocaleDateString() }]
+    });
+    setCurrentView('dashboard');
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setCurrentView('login');
+  };
+
+  useEffect(() => {
+    if (user && user.lastQueryDate !== new Date().toLocaleDateString()) {
+      setUser({ ...user, queriesToday: 0, lastQueryDate: new Date().toLocaleDateString() });
+    }
+  }, [user]);
+
+  if (currentView === 'login') {
+    return <LoginView onLogin={handleLogin} onRegister={(e, name) => {
+      e.preventDefault();
+      setUser({
+        name: name || '新會員', role: 'general', uploads: 0, queriesToday: 0,
+        lastQueryDate: new Date().toLocaleDateString(), queryHistory: [],
+        loginLog: { ip: '114.32.1.88', time: new Date().toLocaleString() },
+        notifications: [{ id: 1, text: '請上傳 20 份資料以開啟正式會員權限。', date: new Date().toLocaleDateString() }]
+      });
+      setCurrentView('dashboard');
+    }} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
+      <nav className="bg-slate-900 text-white shadow-lg sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-4 flex justify-between items-center h-16">
+          <div className="flex items-center space-x-2">
+            <ShieldCheck className="w-6 h-6 text-blue-400" />
+            <span className="font-bold text-xl tracking-wider">民間信用照會網</span>
+          </div>
+          <div className="flex space-x-2 md:space-x-4 overflow-x-auto no-scrollbar">
+            <NavBtn view="dashboard" current={currentView} set={setCurrentView} icon={<User className="w-4 h-4 mr-1"/>}>總覽</NavBtn>
+            <NavBtn view="query" current={currentView} set={setCurrentView} icon={<Search className="w-4 h-4 mr-1"/>}>照會查詢</NavBtn>
+            <NavBtn view="history" current={currentView} set={setCurrentView} icon={<History className="w-4 h-4 mr-1"/>}>查詢紀錄</NavBtn>
+            <NavBtn view="upload" current={currentView} set={setCurrentView} icon={<Upload className="w-4 h-4 mr-1"/>}>資料上傳</NavBtn>
+            <button onClick={handleLogout} className="px-3 py-2 rounded-md text-sm font-medium text-red-400 hover:bg-slate-700 flex items-center shrink-0">
+              <LogOut className="w-4 h-4 mr-1" /> 登出
+            </button>
+          </div>
+        </div>
+      </nav>
+      <main className="max-w-6xl mx-auto px-4 py-8">
+        {currentView === 'dashboard' && <DashboardView user={user} db={db} maxQueries={getMaxQueries(user.uploads)} />}
+        {currentView === 'query' && <QueryView user={user} setUser={setUser} db={db} setDb={setDb} maxQueries={getMaxQueries(user.uploads)} />}
+        {currentView === 'history' && <HistoryView user={user} />}
+        {currentView === 'upload' && <UploadView user={user} setUser={setUser} db={db} setDb={setDb} isValidID={isValidID} />}
+      </main>
+    </div>
+  );
+}
+
+function NavBtn({ view, current, set, icon, children }) {
+  return (
+    <button onClick={() => set(view)} className={`px-3 py-2 rounded-md text-sm font-medium flex items-center shrink-0 transition-colors ${current === view ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>
+      {icon} {children}
+    </button>
+  );
+}
+
+function LoginView({ onLogin, onRegister }) {
+  const [isLogin, setIsLogin] = useState(true);
+  const [username, setUsername] = useState('');
+  return (
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+      <div className="bg-white p-8 rounded-xl shadow-xl w-full max-w-md border border-slate-200">
+        <div className="text-center mb-8">
+          <ShieldAlert className="w-12 h-12 text-blue-600 mx-auto mb-3" />
+          <h1 className="text-2xl font-bold text-slate-800">民間信用照會系統</h1>
+        </div>
+        <div className="flex mb-6 bg-slate-100 rounded-lg p-1">
+          <button onClick={() => setIsLogin(true)} className={`flex-1 py-2 text-sm font-medium rounded-md ${isLogin ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'}`}>登入</button>
+          <button onClick={() => setIsLogin(false)} className={`flex-1 py-2 text-sm font-medium rounded-md ${!isLogin ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'}`}>註冊</button>
+        </div>
+        {isLogin ? (
+          <form onSubmit={onLogin} className="space-y-6">
+            <div><label className="block text-sm font-medium mb-1">帳號</label><input type="text" disabled value="demo_manager" className="w-full px-4 py-2 border rounded-lg bg-slate-50" /></div>
+            <div><label className="block text-sm font-medium mb-1">密碼</label><input type="password" disabled value="password" className="w-full px-4 py-2 border rounded-lg bg-slate-50" /></div>
+            <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium">登入系統</button>
+          </form>
+        ) : (
+          <form onSubmit={(e) => onRegister(e, username)} className="space-y-6">
+            <div><label className="block text-sm font-medium mb-1">設定帳號</label><input type="text" value={username} onChange={(e) => setUsername(e.target.value)} required className="w-full px-4 py-2 border rounded-lg" /></div>
+            <div><label className="block text-sm font-medium mb-1">設定密碼</label><input type="password" required className="w-full px-4 py-2 border rounded-lg" /></div>
+            <button type="submit" className="w-full bg-emerald-600 text-white py-2 rounded-lg font-medium">註冊</button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DashboardView({ user, db, maxQueries }) {
+  const isOfficial = user.role === 'official';
+  const progress = Math.min((user.uploads / 20) * 100, 100);
+  const highRiskRecords = db.filter(item => item.status === '呆帳').sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated)).slice(0, 3);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-end">
+        <h2 className="text-2xl font-bold flex items-center"><User className="w-6 h-6 mr-2 text-blue-600" /> 會員中心 ({user.name})</h2>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white rounded-xl shadow-sm border p-6">
+          <p className="text-sm font-medium text-slate-500">目前權限</p>
+          <h3 className="text-2xl font-bold mt-1 flex items-center">{isOfficial ? <span className="text-amber-500"><Award className="w-6 h-6 inline mr-1" />正式會員</span> : '一般會員'}</h3>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border p-6">
+          <p className="text-sm font-medium text-slate-500">剩餘查詢次數</p>
+          <h3 className="text-3xl font-bold mt-1 text-blue-600">{maxQueries - user.queriesToday} / {maxQueries}</h3>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border p-6">
+          <p className="text-sm font-medium text-slate-500">資料貢獻數</p>
+          <h3 className="text-3xl font-bold mt-1 text-emerald-600">{user.uploads} 筆</h3>
+          {!isOfficial && <div className="w-full bg-slate-100 rounded-full h-2 mt-4"><div className="bg-blue-500 h-2 rounded-full" style={{ width: `${progress}%` }}></div></div>}
+        </div>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="bg-red-50 border-b px-6 py-4 flex items-center text-red-700"><ShieldAlert className="w-5 h-5 mr-2" /><h3 className="font-bold">高風險警示區</h3></div>
+          <div className="p-4 space-y-3">
+            {highRiskRecords.map(item => (
+              <div key={item.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border">
+                <div><p className="font-bold">{item.name[0]}Ｏ{item.name[2] || ''}</p><p className="text-xs text-slate-500 font-mono">{item.idNumber.slice(0, 4)}XXXXXX</p></div>
+                <div className="text-right"><span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold">呆帳</span></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HistoryView({ user }) {
+  return (
+    <div className="max-w-4xl mx-auto">
+      <h2 className="text-2xl font-bold mb-6 flex items-center"><History className="w-6 h-6 mr-2 text-blue-600" /> 歷史查詢</h2>
+      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-slate-50 border-b"><tr><th className="px-6 py-4">時間</th><th className="px-6 py-4">身分證</th><th className="px-6 py-4">姓名</th><th className="px-6 py-4">結果</th></tr></thead>
+          <tbody className="divide-y">
+            {user.queryHistory.map((item, i) => (
+              <tr key={i} className="hover:bg-slate-50"><td className="px-6 py-4 text-slate-500">{item.time}</td><td className="px-6 py-4 font-mono">{item.idNumber}</td><td className="px-6 py-4">{item.name}</td><td className="px-6 py-4">{item.result}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function QueryView({ user, setUser, db, setDb, maxQueries }) {
+  const [form, setForm] = useState({ idNumber: '', name: '', phone: '' });
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    setError('');
+    setResult(null);
+
+    if (!form.idNumber || !form.name || !form.phone) return setError('請填寫完整資訊');
+    if (user.queriesToday >= maxQueries) return setError('額度用盡');
+
+    setUser(prev => ({ ...prev, queriesToday: prev.queriesToday + 1 }));
+    const target = db.find(item => item.idNumber === form.idNumber.toUpperCase());
+    
+    if (target) {
+      setResult({ type: 'exact', data: target });
+    } else {
+      const fuzzy = db.filter(item => item.name === form.name || item.phone === form.phone);
+      setResult(fuzzy.length ? { type: 'fuzzy', data: fuzzy } : { type: 'none' });
+    }
+    setUser(prev => ({ ...prev, queryHistory: [{ time: new Date().toLocaleString(), idNumber: form.idNumber, name: form.name, result: target ? target.status : '查無紀錄' }, ...prev.queryHistory] }));
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-6">
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <h2 className="text-xl font-bold mb-4 flex items-center"><Search className="w-5 h-5 mr-2 text-blue-600" /> 照會查詢</h2>
+        <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <input placeholder="身分證字號" className="border px-4 py-2 rounded-lg uppercase" onChange={e => setForm({...form, idNumber: e.target.value})} />
+          <input placeholder="客戶姓名" className="border px-4 py-2 rounded-lg" onChange={e => setForm({...form, name: e.target.value})} />
+          <input placeholder="聯絡電話" className="border px-4 py-2 rounded-lg" onChange={e => setForm({...form, phone: e.target.value})} />
+          <button type="submit" className="bg-slate-900 text-white rounded-lg py-2 font-bold md:col-span-2">查詢</button>
+        </form>
+        {error && <p className="text-red-500 mt-2 text-sm">{error}</p>}
+      </div>
+
+      {result && (
+        <div className="bg-white rounded-xl shadow-lg border overflow-hidden">
+          <div className="bg-slate-800 text-white px-6 py-4 font-bold flex items-center"><FileText className="w-5 h-5 mr-2" /> 報告分析</div>
+          <div className="p-6">
+            {result.type === 'none' ? <p className="text-center text-lg font-bold text-slate-600">查無負面紀錄</p> :
+             result.type === 'fuzzy' ? <p className="text-amber-600 font-bold">發現關聯高風險資料</p> :
+             <div className="space-y-4">
+               <div className="flex justify-between items-center border-b pb-4">
+                 <p className="text-xl font-mono font-bold">{result.data.idNumber}</p>
+                 <span className={`px-3 py-1 rounded text-white font-bold ${result.data.status === '呆帳' ? 'bg-red-600' : 'bg-emerald-500'}`}>{result.data.status}</span>
+               </div>
+               <div className="grid grid-cols-2 gap-4">
+                 <div className="p-4 border rounded"><p className="text-xs text-slate-500">處理次數</p><p className="font-bold">{result.data.processCount}</p></div>
+                 <div className="p-4 border rounded"><p className="text-xs text-slate-500">涉及金額</p><p className="font-bold">${result.data.amount}</p></div>
+               </div>
+             </div>
+            }
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UploadView({ user, setUser, db, setDb, isValidID }) {
+  const [formData, setFormData] = useState({ name: '', idNumber: '', phone: '', status: '正常', processCount: 0, amount: 0 });
+  const [msg, setMsg] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!isValidID(formData.idNumber)) return setMsg('身分證格式錯誤');
+
+    const payload = { ...formData, idNumber: formData.idNumber.toUpperCase(), lastUpdated: new Date().toLocaleDateString() };
+    const isExist = db.find(i => i.idNumber === payload.idNumber);
+
+    if (isExist) {
+      const { data } = await supabase.from('members').update(payload).eq('idNumber', payload.idNumber).select();
+      if(data) setDb(db.map(item => item.idNumber === payload.idNumber ? data[0] : item));
+    } else {
+      const { data } = await supabase.from('members').insert([payload]).select();
+      if(data) {
+        setDb([...db, data[0]]);
+        setUser(prev => ({ ...prev, uploads: prev.uploads + 1 }));
+      }
+    }
+    setMsg('上傳成功');
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-sm border p-6">
+      <h2 className="text-xl font-bold mb-4 flex items-center"><Upload className="w-5 h-5 mr-2 text-blue-600" /> 同業建檔</h2>
+      {msg && <p className="bg-emerald-50 text-emerald-700 p-3 rounded mb-4">{msg}</p>}
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <input placeholder="身分證字號" required className="border px-4 py-2 rounded" onChange={e => setFormData({...formData, idNumber: e.target.value})} />
+        <input placeholder="姓名" required className="border px-4 py-2 rounded" onChange={e => setFormData({...formData, name: e.target.value})} />
+        <input placeholder="電話" required className="border px-4 py-2 rounded" onChange={e => setFormData({...formData, phone: e.target.value})} />
+        <select className="border px-4 py-2 rounded" onChange={e => setFormData({...formData, status: e.target.value})}><option>正常</option><option>呆帳</option></select>
+        <input type="number" placeholder="處理次數" className="border px-4 py-2 rounded" onChange={e => setFormData({...formData, processCount: e.target.value})} />
+        <input type="number" placeholder="涉及金額" className="border px-4 py-2 rounded" onChange={e => setFormData({...formData, amount: e.target.value})} />
+        <button type="submit" className="bg-blue-600 text-white rounded py-2 font-bold md:col-span-2">提交至資料庫</button>
+      </form>
+    </div>
+  );
+}
